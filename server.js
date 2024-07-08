@@ -8,7 +8,7 @@ require('dotenv').config();
 
 const app = express();
 app.use(cors({
-  origin: 'https://your-frontend-app.herokuapp.com' // Replace with your actual frontend URL
+  origin: 'https://quartzib-documents-front-6d31bbce3648.herokuapp.com' // Replace with your actual frontend URL
 }));
 app.use(express.json());
 
