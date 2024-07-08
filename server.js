@@ -11,6 +11,7 @@ app.use(express.json());
 
 // Use cors middleware
 app.use(cors({
+  // origin: 'https://localhost:3000', // Update this to your frontend URL
   origin: 'https://quartzib-documents-front-6d31bbce3648.herokuapp.com', // Update this to your frontend URL
   methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
   credentials: true, // Enable this if your frontend requires credentials
