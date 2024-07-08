@@ -1,15 +1,12 @@
 const express = require('express');
 const mysql = require('mysql2');
-const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const jwksRsa = require('jwks-rsa');
 const cors = require('cors');
-const { Storage } = require('@google-cloud/storage');
 require('dotenv').config();
 
 const app = express();
-app.use(cors({
-  origin: 'https://quartzib-documents-front-6d31bbce3648.herokuapp.com' // Replace with your actual frontend URL
-}));
+app.use(cors({ origin: 'https://quartzib-documents-front-6d31bbce3648.herokuapp.com'})); // Replace with your frontend URL
 app.use(express.json());
 
 // MySQL Connection
@@ -28,62 +25,49 @@ db.connect(err => {
   console.log('Connected to database.');
 });
 
-// Google Cloud Storage
-const storage = new Storage({ keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS });
-const bucket = storage.bucket(process.env.BUCKET_NAME);
-
 // Authentication Middleware
-function authenticateToken(req, res, next) {
+const checkJwt = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.sendStatus(401);
+  if (!token) {
+    console.error('No token provided');
+    return res.sendStatus(401);
+  }
 
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-    if (err) return res.sendStatus(403);
-    req.user = user;
+  const client = jwksRsa({
+    jwksUri: `https://${process.env.AUTH0_DOMAIN}/.well-known/jwks.json`
+  });
+
+  const getKey = (header, callback) => {
+    client.getSigningKey(header.kid, (err, key) => {
+      const signingKey = key.publicKey || key.rsaPublicKey;
+      callback(null, signingKey);
+    });
+  };
+
+  jwt.verify(token, getKey, { algorithms: ['RS256'], audience: process.env.AUTH0_AUDIENCE, issuer: `https://${process.env.AUTH0_DOMAIN}/` }, (err, decoded) => {
+    if (err) {
+      console.error('Token verification failed:', err);
+      return res.sendStatus(403);
+    }
+    req.user = decoded;
     next();
   });
-}
+};
 
 // Routes
-app.post('/login', async (req, res) => {
-  const { companyId, username, password } = req.body;
-
-  db.query('SELECT * FROM users WHERE company_id = ? AND username = ?', [companyId, username], async (err, results) => {
-    if (err) throw err;
-    if (results.length === 0) return res.status(400).send('Invalid credentials');
-
-    const user = results[0];
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).send('Invalid credentials');
-
-    const token = jwt.sign({ userId: user.id, companyId: user.company_id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-    res.send({ token });
-  });
-});
-
-app.get('/tables', authenticateToken, (req, res) => {
+app.get('/tables', checkJwt, (req, res) => {
   db.query('SHOW TABLES', (err, results) => {
     if (err) throw err;
     res.send(results);
   });
 });
 
-app.get('/productions', authenticateToken, (req, res) => {
+app.get('/productions', checkJwt, (req, res) => {
   const companyId = req.user.companyId;
   db.query('SELECT * FROM productions WHERE company_id = ?', [companyId], (err, results) => {
     if (err) throw err;
     res.send(results);
-  });
-});
-
-app.get('/productions/:productionId', authenticateToken, (req, res) => {
-  const { productionId } = req.params;
-  const prefix = `productions/${productionId}/`;
-
-  bucket.getFiles({ prefix }, (err, files) => {
-    if (err) throw err;
-    res.send(files.map(file => file.name));
   });
 });
 
