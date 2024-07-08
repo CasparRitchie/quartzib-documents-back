@@ -3,32 +3,12 @@ const mysql = require('mysql2');
 const jwt = require('jsonwebtoken');
 const jwksRsa = require('jwks-rsa');
 const cors = require('cors');
+const bcrypt = require('bcryptjs'); // Make sure to add this if you haven't already
 require('dotenv').config();
 
 const app = express();
-
-const allowedOrigins = [
-  'https://quartzib-documents-front-6d31bbce3648.herokuapp.com',
-  'http://localhost:3000'
-];
-
-app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  }
-}));
+app.use(cors({ origin: 'https://quartzib-documents-front-6d31bbce3648.herokuapp.com' })); // Replace with your frontend URL
 app.use(express.json());
-
-// Initialize dbStatus
-const dbStatus = {
-  connected: false,
-  tables: [],
-  tableData: {}
-};
 
 // MySQL Connection
 const db = mysql.createConnection({
@@ -37,6 +17,8 @@ const db = mysql.createConnection({
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME
 });
+
+let dbStatus = { connected: false, tables: [] };
 
 db.connect(err => {
   if (err) {
@@ -56,21 +38,6 @@ db.connect(err => {
     }
     console.log('Tables in database:', results);
     dbStatus.tables = results;
-
-    // Fetch entries from each table
-    results.forEach(table => {
-      const tableName = table.Tables_in_quartzib;
-      db.query(`SELECT * FROM ${tableName}`, (err, entries) => {
-        if (err) {
-          console.error(`Error fetching entries from ${tableName}:`, err);
-          dbStatus.tableData[tableName] = [];
-        } else {
-          console.log(`Entries in ${tableName}:`);
-          // console.log(`Entries in ${tableName}:`, entries);
-          dbStatus.tableData[tableName] = entries;
-        }
-      });
-    });
   });
 });
 
@@ -139,11 +106,6 @@ app.get('/productions', checkJwt, (req, res) => {
   });
 });
 
-// Status route for debugging
-app.get('/status', (req, res) => {
-  res.json(dbStatus);
-});
-
 app.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
@@ -178,6 +140,11 @@ app.post('/login', async (req, res) => {
 
     res.json({ token });
   });
+});
+
+// Status route
+app.get('/status', (req, res) => {
+  res.json(dbStatus);
 });
 
 const PORT = process.env.PORT || 5000;
