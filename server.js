@@ -6,7 +6,7 @@ const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
-app.use(cors({ origin: 'https://your-frontend-app.herokuapp.com' })); // Replace with your frontend URL
+app.use(cors({ origin: 'https://quartzib-documents-front-6d31bbce3648.herokuapp.com' })); // Replace with your frontend URL
 app.use(express.json());
 
 // MySQL Connection
@@ -23,6 +23,15 @@ db.connect(err => {
     return;
   }
   console.log('Connected to database.');
+
+  // Query to show tables immediately after connection
+  db.query('SHOW TABLES', (err, results) => {
+    if (err) {
+      console.error('Error fetching tables:', err);
+      return;
+    }
+    console.log('Tables in database:', results);
+  });
 });
 
 // Authentication Middleware
@@ -63,16 +72,29 @@ const checkJwt = (req, res, next) => {
 // Routes
 app.get('/tables', checkJwt, (req, res) => {
   db.query('SHOW TABLES', (err, results) => {
-    if (err) throw err;
+    if (err) {
+      console.error('Error fetching tables:', err);
+      return res.status(500).send('Error fetching tables');
+    }
+    console.log('Tables fetched successfully:', results);
     res.send(results);
   });
 });
 
 app.get('/productions', checkJwt, (req, res) => {
-  const companyId = req.user['https://your-app.com/companyId']; // Adjust this based on your custom claim
+  const companyId = req.user['https://quartzib-documents-front-6d31bbce3648.herokuapp.com/companyId']; // Adjust this based on your custom claim
+  if (!companyId) {
+    console.error('Company ID not found in token');
+    return res.status(400).send('Company ID not found in token');
+  }
   console.log('Company ID:', companyId);
+
   db.query('SELECT * FROM productions WHERE company_id = ?', [companyId], (err, results) => {
-    if (err) throw err;
+    if (err) {
+      console.error('Error fetching productions:', err);
+      return res.status(500).send('Error fetching productions');
+    }
+    console.log('Productions fetched successfully:', results);
     res.send(results);
   });
 });
