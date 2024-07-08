@@ -2,20 +2,15 @@ const express = require('express');
 const mysql = require('mysql2');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { Storage } = require('@google-cloud/storage');
 const cors = require('cors');
+const { Storage } = require('@google-cloud/storage');
 require('dotenv').config();
 
 const app = express();
-app.use(express.json());
-
-// Use cors middleware
 app.use(cors({
-  // origin: 'https://localhost:3000', // Update this to your frontend URL
-  origin: 'https://quartzib-documents-front-6d31bbce3648.herokuapp.com', // Update this to your frontend URL
-  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-  credentials: true, // Enable this if your frontend requires credentials
+  origin: 'https://your-frontend-app.herokuapp.com' // Replace with your actual frontend URL
 }));
+app.use(express.json());
 
 // MySQL Connection
 const db = mysql.createConnection({
@@ -67,6 +62,13 @@ app.post('/login', async (req, res) => {
   });
 });
 
+app.get('/tables', authenticateToken, (req, res) => {
+  db.query('SHOW TABLES', (err, results) => {
+    if (err) throw err;
+    res.send(results);
+  });
+});
+
 app.get('/productions', authenticateToken, (req, res) => {
   const companyId = req.user.companyId;
   db.query('SELECT * FROM productions WHERE company_id = ?', [companyId], (err, results) => {
@@ -82,18 +84,6 @@ app.get('/productions/:productionId', authenticateToken, (req, res) => {
   bucket.getFiles({ prefix }, (err, files) => {
     if (err) throw err;
     res.send(files.map(file => file.name));
-  });
-});
-
-app.get('/tables', authenticateToken, (req, res) => {
-  const query = "SHOW TABLES";
-  db.query(query, (err, results) => {
-    if (err) {
-      console.error('Error fetching tables:', err);
-      return res.status(500).send('Error fetching tables');
-    }
-    const tables = results.map(row => Object.values(row)[0]);
-    res.send(tables);
   });
 });
 
