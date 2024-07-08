@@ -3,6 +3,7 @@ const mysql = require('mysql2');
 const jwt = require('jsonwebtoken');
 const jwksRsa = require('jwks-rsa');
 const cors = require('cors');
+const bcrypt = require('bcryptjs'); // Make sure to add this if you haven't already
 require('dotenv').config();
 
 const app = express();
@@ -17,20 +18,26 @@ const db = mysql.createConnection({
   database: process.env.DB_NAME
 });
 
+let dbStatus = { connected: false, tables: [] };
+
 db.connect(err => {
   if (err) {
     console.error('Database connection failed:', err.stack);
+    dbStatus.connected = false;
     return;
   }
   console.log('Connected to database.');
+  dbStatus.connected = true;
 
   // Query to show tables immediately after connection
   db.query('SHOW TABLES', (err, results) => {
     if (err) {
       console.error('Error fetching tables:', err);
+      dbStatus.tables = [];
       return;
     }
     console.log('Tables in database:', results);
+    dbStatus.tables = results;
   });
 });
 
@@ -97,6 +104,47 @@ app.get('/productions', checkJwt, (req, res) => {
     console.log('Productions fetched successfully:', results);
     res.send(results);
   });
+});
+
+app.post('/login', async (req, res) => {
+  const { email, password } = req.body;
+
+  // Example user retrieval from database
+  const userQuery = 'SELECT * FROM users WHERE email = ?';
+  db.query(userQuery, [email], async (err, results) => {
+    if (err) {
+      console.error('Database query error:', err);
+      return res.status(500).send('Database error');
+    }
+
+    if (results.length === 0) {
+      return res.status(401).send('Invalid credentials');
+    }
+
+    const user = results[0];
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return res.status(401).send('Invalid credentials');
+    }
+
+    // Add custom claim (companyId)
+    const token = jwt.sign(
+      {
+        sub: user.id,
+        email: user.email,
+        companyId: user.company_id, // Add companyId here
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    res.json({ token });
+  });
+});
+
+// Status route
+app.get('/status', (req, res) => {
+  res.json(dbStatus);
 });
 
 const PORT = process.env.PORT || 5000;
