@@ -6,7 +6,7 @@ const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
-app.use(cors({ origin: 'https://quartzib-documents-front-6d31bbce3648.herokuapp.com'})); // Replace with your frontend URL
+app.use(cors({ origin: 'https://your-frontend-app.herokuapp.com' })); // Replace with your frontend URL
 app.use(express.json());
 
 // MySQL Connection
@@ -40,6 +40,10 @@ const checkJwt = (req, res, next) => {
 
   const getKey = (header, callback) => {
     client.getSigningKey(header.kid, (err, key) => {
+      if (err) {
+        console.error('Error getting signing key:', err);
+        return res.sendStatus(500);
+      }
       const signingKey = key.publicKey || key.rsaPublicKey;
       callback(null, signingKey);
     });
@@ -50,6 +54,7 @@ const checkJwt = (req, res, next) => {
       console.error('Token verification failed:', err);
       return res.sendStatus(403);
     }
+    console.log('Token verified successfully:', decoded);
     req.user = decoded;
     next();
   });
@@ -64,7 +69,8 @@ app.get('/tables', checkJwt, (req, res) => {
 });
 
 app.get('/productions', checkJwt, (req, res) => {
-  const companyId = req.user.companyId;
+  const companyId = req.user['https://your-app.com/companyId']; // Adjust this based on your custom claim
+  console.log('Company ID:', companyId);
   db.query('SELECT * FROM productions WHERE company_id = ?', [companyId], (err, results) => {
     if (err) throw err;
     res.send(results);
